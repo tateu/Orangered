@@ -7,6 +7,7 @@
 #import <UIKit/UIApplication+Private.h>
 #import <BulletinBoard/BulletinBoard.h>
 #import <SpringBoard/SBMediaController.h>
+#import <SpringBoard/SBWiFiManager.h>
 #import <ToneLibrary/ToneLibrary.h>
 
 /*
@@ -57,6 +58,7 @@ static NSError *orangeredError;
 static BOOL checkOnUnlock;
 static NSTimeInterval lastRequestInterval;
 static NSDate *lastMessageDate;
+static int stateForWiFi = 0;
 
 /*                                                                                                                                         
                      /$$                                           /$$
@@ -138,6 +140,26 @@ static NSDate *lastMessageDate;
 
 	ORLOG(@"Sending check message from SpringBoard...");
 	[[NSDistributedNotificationCenter defaultCenter] postNotificationName:kOrangeredCheckNotificationName object:nil userInfo:@{ @"sender" : @"SpringBoard" }];
+}
+
+%end
+
+%hook SBWiFiManager
+
+-(void)_updateWiFiState {
+	%orig;
+
+	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^(void) {
+		int state = [[%c(SBWiFiManager) sharedInstance] wiFiEnabled] && [[%c(SBWiFiManager) sharedInstance] isAssociated] ? 1 : 2;
+
+		if (stateForWiFi != 0 && state != stateForWiFi) {
+			stateForWiFi = state;
+			ORLOG(@"Sending check message from SBWiFiManager...");
+			[[NSDistributedNotificationCenter defaultCenter] postNotificationName:kOrangeredCheckNotificationName object:nil userInfo:@{ @"sender" : @"SpringBoard", @"type" : @"WiFi" }];
+		} else {
+			stateForWiFi = state;
+		}
+	});
 }
 
 %end
@@ -295,13 +317,26 @@ static BBServer *orangeredServer;
 		CGFloat intervalUnit = [orangeredPreferences floatForKey:@"intervalControl" default:60.0];
 
 		if (intervalUnit > 0.0) {
-			NSString *refreshIntervalString = [orangeredPreferences objectForKey:@"refreshInterval" default:@"60"];
+			NSString *refreshIntervalString = @"60";
+			stateForWiFi = [[%c(SBWiFiManager) sharedInstance] wiFiEnabled] && [[%c(SBWiFiManager) sharedInstance] isAssociated] ? 1 : 2;
+			if (stateForWiFi == 2) {
+				refreshIntervalString = [orangeredPreferences objectForKey:@"refreshIntervalCellular" default:@"60"];
+			} else {
+				refreshIntervalString = [orangeredPreferences objectForKey:@"refreshInterval" default:@"60"];
+			}
 			CGFloat refreshInterval = [refreshIntervalString floatValue] * intervalUnit;
 
 			orangeredTimer = [[PCSimpleTimer alloc] initWithTimeInterval:refreshInterval serviceIdentifier:@"com.insanj.orangered" target:notificationProvider selector:@selector(fireAway) userInfo:nil];
 			[orangeredTimer scheduleInRunLoop:[NSRunLoop mainRunLoop]];
 
 			ORLOG(@"Spun up timer (%@) to ping Reddit every %f seconds.", orangeredTimer, refreshInterval);
+
+			// WiFi status changed, reset timer and exit without checking for messages
+			//      or should we remove this and check everytime the connection type changes
+			//      because if this happens often, there is a chance we may never check for messages?
+//			if (notification.userInfo[@"type"]) {
+//				return;
+//			}
 		}
 
 		else if ([notification.userInfo[@"sender"] isEqualToString:@"SpringBoard"]) {
@@ -311,6 +346,7 @@ static BBServer *orangeredServer;
 
 		else {
 			ORLOG(@"Appears our interval is set for Never. Sulking time... :/");
+			return;
 		}
 
 		CGFloat rateGuard = [orangeredPreferences floatForKey:@"rateGuard" default:0];

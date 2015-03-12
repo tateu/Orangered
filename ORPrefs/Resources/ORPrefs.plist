@@ -175,7 +175,19 @@
 			<key>isNumeric</key> 	<true/>
 			<key>id</key> 			<string>RefreshInterval</string>
 			<key>key</key> 			<string>refreshInterval</string>
-			<key>label</key> 		<string>Refresh Interval</string>
+			<key>label</key> 		<string>Refresh Interval - WiFi</string>
+			<key>placeholder</key> 	<string>3600, 60, 1</string>
+		</dict>
+
+		<dict>
+			<key>cell</key> 		<string>PSEditTextCell</string>
+			<key>cellClass</key> 	<string>OREditDoneTextCell</string>
+			<key>detail</key> 		<string>PSDetailController</string>
+			<key>defaults</key> 	<string>com.insanj.orangered</string>
+			<key>isNumeric</key> 	<true/>
+			<key>id</key> 			<string>RefreshIntervalCellular</string>
+			<key>key</key> 			<string>refreshIntervalCellular</string>
+			<key>label</key> 		<string>Refresh Interval - Cellular</string>
 			<key>placeholder</key> 	<string>3600, 60, 1</string>
 		</dict>
 
